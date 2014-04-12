@@ -1,0 +1,6 @@
+---
+  roles:
+    Titan-Collector:
+      elbs:
+        - titan-collector-preview
+  default_role: Titan-Collector
