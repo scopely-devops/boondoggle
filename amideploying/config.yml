@@ -1,6 +1,9 @@
 ---
   roles:
     Titan-Collector:
-      elbs:
-        - titan-collector-preview
+      elb: titan-collector-preview
+      security_group: sg-6c02f606
+      key: dev-titan
+      lc_prefix: titan-lc-
+      ag_prefix: titan-asg-
   default_role: Titan-Collector

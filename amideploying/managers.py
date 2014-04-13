@@ -18,53 +18,6 @@ ag_prefix = "titan-asg-"
 region = "us-east-1"
 
 
-def launch_asg(ami):
-    """Creates ASG for the specified AMI and returns it.
-
-    :param ami:
-    """
-    autoscale = boto.ec2.autoscale.connect_to_region(region, profile_name=profile_name)
-
-    launch_configuration = LaunchConfiguration(name=lc_prefix + ami, image_id=ami, key_name=key, security_groups=[sg],
-                                               instance_type="c3.large")
-    autoscale.create_launch_configuration(launch_configuration)
-
-    ag = AutoScalingGroup(group_name=ag_prefix + ami, load_balancers=[elb], availability_zones=['us-east-1a'],
-                          launch_config=launch_configuration, min_size=2, max_size=4, connection=autoscale)
-    autoscale.create_auto_scaling_group(ag)
-
-    return ag
-
-
-def get_asg(ami):
-    return get_asg_by_name(ag_prefix + ami)
-
-
-def get_asg_by_name(name):
-    autoscale = boto.ec2.autoscale.connect_to_region(region, profile_name=profile_name)
-    groups = autoscale.get_all_groups(names=[name])
-    if groups:
-        return groups[0]
-
-    return None
-
-
-def get_asg_instances(group):
-    ec2 = boto.ec2.connect_to_region(region, profile_name=profile_name)
-
-    refreshed_group = group
-    while True:
-        if refreshed_group.instances is not None and len(refreshed_group.instances) > 0:
-            break
-
-        refreshed_group = get_asg_by_name(group.name)
-        time.sleep(2)
-
-    instance_ids = [i.instance_id for i in refreshed_group.instances]
-    instances = ec2.get_only_instances(instance_ids)
-    return instances
-
-
 def wait_for_status(instances_to_watch, state):
     """Waits for all of the instances to reach the specified state"""
     instance_ids = [instance.id for instance in instances_to_watch]
@@ -91,123 +44,157 @@ def wait_for_status(instances_to_watch, state):
         time.sleep(5)
 
 
-def wait_for_elb_health(instances):
-    """Waits for all of the instances to be reported as healthy by the ELB"""
+class DeployManager(object):
 
-    elb_connection = boto.ec2.elb.connect_to_region(region, profile_name=profile_name)
+    def __init__(self, profile, role, config, ami):
+        self.roles = config['roles']
+        self.profile = profile
+        self.role = role
+        self.ami = ami
+        self.ec2 = boto.ec2.connect_to_region(region, profile_name=profile)
+        self.elb = boto.ec2.elb.ELBConnection(profile_name=profile)
+        self.autoscale = boto.ec2.autoscale.connect_to_region(region, profile_name=profile)
 
-    instance_ids = [
-        instance.id
-        for instance in instances
-    ]
+    def launch_asg(self, ami):
+        launch_configuration = LaunchConfiguration(name=lc_prefix + ami, image_id=ami, key_name=key, security_groups=[sg],
+                                                   instance_type="c3.large")
+        self.autoscale.create_launch_configuration(launch_configuration)
 
-    timeout = time.time() + 60 * 10
-    elapsed = 0
-    while True:
-        assert time.time() < timeout
-        try:
-            health_statuses = elb_connection.describe_instance_health(elb, instances=instance_ids)
+        ag = AutoScalingGroup(group_name=ag_prefix + ami, load_balancers=[elb], availability_zones=[region],
+                              launch_config=launch_configuration, min_size=2, max_size=4, connection=self.autoscale)
+        self.autoscale.create_auto_scaling_group(ag)
 
+        return ag
+
+    def get_asg(self):
+        return self.get_asg_by_name(ag_prefix + self.ami)
+
+    def get_asg_by_name(self, name):
+        groups = self.autoscale.get_all_groups(names=[name])
+        if groups:
+            return groups[0]
+
+        return None
+
+    def get_asg_instances(self, group):
+        refreshed_group = group
+        while True:
+            if refreshed_group.instances is not None and len(refreshed_group.instances) > 0:
+                break
+
+            refreshed_group = self.get_asg_by_name(group.name)
+            time.sleep(2)
+
+        instance_ids = [i.instance_id for i in refreshed_group.instances]
+        instances = self.ec2.get_only_instances(instance_ids)
+        return instances
+
+    def wait_for_elb_health(self, instances):
+        """Waits for all of the instances to be reported as healthy by the ELB"""
+
+        instance_ids = [
+            instance.id
+            for instance in instances
+        ]
+
+        timeout = time.time() + 60 * 10
+        elapsed = 0
+        while True:
+            assert time.time() < timeout
+            try:
+                health_statuses = self.elb.describe_instance_health(elb, instances=instance_ids)
+
+                if all([
+                            status.state == "InService"
+                            for status in health_statuses
+                ]):
+                    break
+
+                print '(%ds) Waiting for instances to be in service on ELB...' % elapsed
+                print [
+                    status.state
+                    for status in health_statuses
+                ]
+            except BotoServerError:
+                print '(%ds) Waiting for instances to be attached to ELB' % elapsed
+
+            elapsed += 5
+            time.sleep(5)
+
+    def wait_for_group_to_be_quiet(self, autoscaling_group):
+        """Deletes ASG once it has no activities"""
+
+        maximum_wait = 60 * 1
+        elapsed = 0
+        while True:
             if all([
-                        status.state == "InService"
-                        for status in health_statuses
+                        activity.progress == '100'
+                        for activity in autoscaling_group.get_activities()
             ]):
                 break
 
-            print '(%ds) Waiting for instances to be in service on ELB...' % elapsed
-            print [
-                status.state
-                for status in health_statuses
-            ]
-        except BotoServerError:
-            print '(%ds) Waiting for instances to be attached to ELB' % elapsed
+            print "(%ds) ASG has activities with progress %s" % (elapsed, [
+                activity.progress
+                for activity in autoscaling_group.get_activities()
+            ])
 
-        elapsed += 5
-        time.sleep(5)
+            assert elapsed < maximum_wait
 
+            elapsed += 5
+            time.sleep(5)
+            autoscaling_group = self.get_asg_by_name(autoscaling_group.name)
 
-def wait_for_group_to_be_quiet(autoscaling_group):
-    """Deletes ASG once it has no activities"""
+    def delete_launch_configuration_for_ami(self, ami):
+        self.autoscale.delete_launch_configuration(lc_prefix + ami)
 
-    maximum_wait = 60 * 1
-    elapsed = 0
-    while True:
-        if all([
-                    activity.progress == '100'
-                    for activity in autoscaling_group.get_activities()
-        ]):
-            break
+    def delete_autoscaling_for_ami(self, ami):
+        self.autoscale.delete_auto_scaling_group(ag_prefix + ami)
 
-        print "(%ds) ASG has activities with progress %s" % (elapsed, [
-            activity.progress
-            for activity in autoscaling_group.get_activities()
-        ])
+    def start_ag(self, ami):
+        created_ag = self.launch_asg(ami)
+        print 'Waiting for ASG to be initialized'
+        time.sleep(1)
 
-        assert elapsed < maximum_wait
+        instances = self.get_asg_instances(created_ag)
 
-        elapsed += 5
-        time.sleep(5)
-        autoscaling_group = get_asg_by_name(autoscaling_group.name)
+        print instances
 
+        wait_for_status(instances, "running")
 
-def delete_launch_configuration_for_ami(ami):
-    autoscale = boto.ec2.autoscale.connect_to_region(region, profile_name=profile_name)
-    autoscale.delete_launch_configuration(lc_prefix + ami)
+        print 'Instances running'
 
+        self.wait_for_elb_health(instances)
 
-def delete_autoscaling_for_ami(ami):
-    autoscale = boto.ec2.autoscale.connect_to_region(region, profile_name=profile_name)
-    autoscale.delete_auto_scaling_group(ag_prefix + ami)
+        print 'Instances attached to ELB'
 
+    def shutdown_other_ags(self, keep_ami):
+        groups_to_shut_down = [
+            g
+            for g in self.autoscale.get_all_groups()
+            if g.name != (ag_prefix + keep_ami) and g.name.startswith(ag_prefix)
+        ]
 
-def start_ag(ami):
-    created_ag = launch_asg(ami)
-    print 'Waiting for ASG to be initialized'
-    time.sleep(1)
+        for g in self.autoscale.get_all_groups():
+            print g.name
 
-    instances = get_asg_instances(created_ag)
+        print "Will shut down %s" % groups_to_shut_down
 
-    print instances
+        for g in groups_to_shut_down:
+            ami = g.name[len(ag_prefix):]
+            print ami
+            self.shutdown_ag_by_ami(ami)
 
-    wait_for_status(instances, "running")
+    def shutdown_ag_by_ami(self, ami):
+        created_ag = self.get_asg(ami)
+        instances = self.get_asg_instances(created_ag)
 
-    print 'Instances running'
+        print 'Shutting down instances'
+        created_ag.shutdown_instances()
+        wait_for_status(instances, "terminated")
 
-    wait_for_elb_health(instances)
+        print 'Deleting autoscaling group'
+        self.wait_for_group_to_be_quiet(created_ag)
+        self.delete_autoscaling_for_ami(ami)
 
-    print 'Instances attached to ELB'
-
-
-def shutdown_other_ags(keep_ami):
-    autoscale = boto.ec2.autoscale.connect_to_region(region, profile_name=profile_name)
-    groups_to_shut_down = [
-        g
-        for g in autoscale.get_all_groups()
-        if g.name != (ag_prefix + keep_ami) and g.name.startswith(ag_prefix)
-    ]
-
-    for g in autoscale.get_all_groups():
-        print g.name
-
-    print "Will shut down %s" % groups_to_shut_down
-
-    for g in groups_to_shut_down:
-        ami = g.name[len(ag_prefix):]
-        print ami
-        shutdown_ag_by_ami(ami)
-
-
-def shutdown_ag_by_ami(ami):
-    created_ag = get_asg(ami)
-    instances = get_asg_instances(created_ag)
-
-    print 'Shutting down instances'
-    created_ag.shutdown_instances()
-    wait_for_status(instances, "terminated")
-
-    print 'Deleting autoscaling group'
-    wait_for_group_to_be_quiet(created_ag)
-    delete_autoscaling_for_ami(ami)
-
-    print 'Deleting launch configuration'
-    delete_launch_configuration_for_ami(ami)
+        print 'Deleting launch configuration'
+        self.delete_launch_configuration_for_ami(ami)
