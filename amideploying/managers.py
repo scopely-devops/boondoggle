@@ -31,8 +31,8 @@ def wait_for_status(instances_to_watch, state):
         for instance in instances_to_watch:
             instance.update()
         if all([
-                            i.state == state or i.state == "terminated"
-                            for i in instances_to_watch
+            i.state == state or i.state == "terminated"
+            for i in instances_to_watch
         ]):
             break
         print '(%ds) Waiting for state %s...' % (elapsed, state)
@@ -45,7 +45,6 @@ def wait_for_status(instances_to_watch, state):
 
 
 class DeployManager(object):
-
     def __init__(self, profile, role, config, ami):
         self.roles = config['roles']
         self.profile = profile
@@ -56,7 +55,8 @@ class DeployManager(object):
         self.autoscale = boto.ec2.autoscale.connect_to_region(region, profile_name=profile)
 
     def launch_asg(self, ami):
-        launch_configuration = LaunchConfiguration(name=lc_prefix + ami, image_id=ami, key_name=key, security_groups=[sg],
+        launch_configuration = LaunchConfiguration(name=lc_prefix + ami, image_id=ami, key_name=key,
+                                                   security_groups=[sg],
                                                    instance_type="c3.large")
         self.autoscale.create_launch_configuration(launch_configuration)
 
@@ -105,8 +105,8 @@ class DeployManager(object):
                 health_statuses = self.elb.describe_instance_health(elb, instances=instance_ids)
 
                 if all([
-                            status.state == "InService"
-                            for status in health_statuses
+                    status.state == "InService"
+                    for status in health_statuses
                 ]):
                     break
 
@@ -128,8 +128,8 @@ class DeployManager(object):
         elapsed = 0
         while True:
             if all([
-                        activity.progress == '100'
-                        for activity in autoscaling_group.get_activities()
+                activity.progress == '100'
+                for activity in autoscaling_group.get_activities()
             ]):
                 break
 
@@ -182,10 +182,10 @@ class DeployManager(object):
         for g in groups_to_shut_down:
             ami = g.name[len(ag_prefix):]
             print ami
-            self.shutdown_ag_by_ami(ami)
+            self.shutdown_ag_by_ami()
 
-    def shutdown_ag_by_ami(self, ami):
-        created_ag = self.get_asg(ami)
+    def shutdown_ag_by_ami(self):
+        created_ag = self.get_asg()
         instances = self.get_asg_instances(created_ag)
 
         print 'Shutting down instances'
@@ -194,7 +194,7 @@ class DeployManager(object):
 
         print 'Deleting autoscaling group'
         self.wait_for_group_to_be_quiet(created_ag)
-        self.delete_autoscaling_for_ami(ami)
+        self.delete_autoscaling_for_ami(self.ami)
 
         print 'Deleting launch configuration'
-        self.delete_launch_configuration_for_ami(ami)
+        self.delete_launch_configuration_for_ami(self.ami)
