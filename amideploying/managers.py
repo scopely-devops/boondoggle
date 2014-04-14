@@ -16,6 +16,7 @@ lc_prefix = "titan-lc-"
 ag_prefix = "titan-asg-"
 
 region = "us-east-1"
+availability_zones = ["us-east-1a"]
 
 
 def wait_for_status(instances_to_watch, state):
@@ -46,7 +47,6 @@ def wait_for_status(instances_to_watch, state):
 
 class DeployManager(object):
     def __init__(self, profile, role, config, ami):
-        self.roles = config['roles']
         self.profile = profile
         self.role = role
         self.ami = ami
@@ -60,7 +60,7 @@ class DeployManager(object):
                                                    instance_type="c3.large")
         self.autoscale.create_launch_configuration(launch_configuration)
 
-        ag = AutoScalingGroup(group_name=ag_prefix + ami, load_balancers=[elb], availability_zones=[region],
+        ag = AutoScalingGroup(group_name=ag_prefix + ami, load_balancers=[elb], availability_zones=availability_zones,
                               launch_config=launch_configuration, min_size=2, max_size=4, connection=self.autoscale)
         self.autoscale.create_auto_scaling_group(ag)
 
@@ -150,8 +150,8 @@ class DeployManager(object):
     def delete_autoscaling_for_ami(self, ami):
         self.autoscale.delete_auto_scaling_group(ag_prefix + ami)
 
-    def start_ag(self, ami):
-        created_ag = self.launch_asg(ami)
+    def start_ag(self):
+        created_ag = self.launch_asg(self.ami)
         print 'Waiting for ASG to be initialized'
         time.sleep(1)
 
@@ -167,7 +167,8 @@ class DeployManager(object):
 
         print 'Instances attached to ELB'
 
-    def shutdown_other_ags(self, keep_ami):
+    def shutdown_other_ags(self):
+        keep_ami = self.ami
         groups_to_shut_down = [
             g
             for g in self.autoscale.get_all_groups()

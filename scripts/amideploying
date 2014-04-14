@@ -18,14 +18,18 @@ Options:
 
 
 from docopt import docopt
-from amideploying.managers import shutdown_ag_by_ami, shutdown_other_ags, start_ag
+from amideploying.managers import DeployManager
 from amideploying import __version__
 
 if __name__ == '__main__':
     args = docopt(__doc__, version='Scaling {0}'.format(__version__))
+    manager = DeployManager(profile="preview",
+                            ami=args.get("<ami>"),
+                            config={},
+                            role="Titan-Collector")
     if args['launch']:
-        start_ag(args.get("<ami>"))
+        manager.start_ag()
     if args['terminate']:
-        shutdown_ag_by_ami(args.get("<ami>"))
+        manager.shutdown_ag_by_ami()
     if args['terminate-others']:
-        shutdown_other_ags(args.get("<ami>"))
+        manager.shutdown_other_ags()
