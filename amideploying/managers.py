@@ -66,8 +66,8 @@ class DeployManager(object):
 
         return ag
 
-    def get_asg(self):
-        return self.get_asg_by_name(ag_prefix + self.ami)
+    def get_asg(self, ami):
+        return self.get_asg_by_name(ag_prefix + ami)
 
     def get_asg_by_name(self, name):
         groups = self.autoscale.get_all_groups(names=[name])
@@ -183,10 +183,10 @@ class DeployManager(object):
         for g in groups_to_shut_down:
             ami = g.name[len(ag_prefix):]
             print ami
-            self.shutdown_ag_by_ami()
+            self.shutdown_ag_by_ami(ami)
 
-    def shutdown_ag_by_ami(self):
-        created_ag = self.get_asg()
+    def shutdown_ag_by_ami(self, ami):
+        created_ag = self.get_asg(ami)
         instances = self.get_asg_instances(created_ag)
 
         print 'Shutting down instances'
@@ -195,7 +195,7 @@ class DeployManager(object):
 
         print 'Deleting autoscaling group'
         self.wait_for_group_to_be_quiet(created_ag)
-        self.delete_autoscaling_for_ami(self.ami)
+        self.delete_autoscaling_for_ami(ami)
 
         print 'Deleting launch configuration'
-        self.delete_launch_configuration_for_ami(self.ami)
+        self.delete_launch_configuration_for_ami(ami)
