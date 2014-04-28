@@ -1,9 +1,15 @@
 ---
   roles:
     Titan-Collector:
-      elb: titan-collector-preview
-      security_group: sg-6c02f606
+      load_balancers:
+        - titan-collector-preview
+      security_groups:
+        - sg-6c02f606
       key: dev-titan
-      lc_prefix: titan-lc-
-      ag_prefix: titan-asg-
+      lc_prefix: titan-collector-lc-
+      ag_prefix: titan-collector-asg-
+      region: us-east-1
+      availability_zones:
+        - us-east-1a
+      instance_type: c3.large
   default_role: Titan-Collector

@@ -6,18 +6,6 @@ from boto.ec2.autoscale import AutoScalingGroup
 from boto.ec2.autoscale import LaunchConfiguration
 import boto.ec2.elb
 
-key = "dev-titan"
-sg = "sg-6c02f606"
-elb = "titan-collector-preview"
-
-profile_name = "preview"
-
-lc_prefix = "titan-lc-"
-ag_prefix = "titan-asg-"
-
-region = "us-east-1"
-availability_zones = ["us-east-1a"]
-
 
 def wait_for_status(instances_to_watch, state):
     """Waits for all of the instances to reach the specified state"""
@@ -32,8 +20,8 @@ def wait_for_status(instances_to_watch, state):
         for instance in instances_to_watch:
             instance.update()
         if all([
-            i.state == state or i.state == "terminated"
-            for i in instances_to_watch
+                            i.state == state or i.state == "terminated"
+                            for i in instances_to_watch
         ]):
             break
         print '(%ds) Waiting for state %s...' % (elapsed, state)
@@ -50,24 +38,35 @@ class DeployManager(object):
         self.profile = profile
         self.role = role
         self.ami = ami
-        self.ec2 = boto.ec2.connect_to_region(region, profile_name=profile)
-        self.elb = boto.ec2.elb.ELBConnection(profile_name=profile)
-        self.autoscale = boto.ec2.autoscale.connect_to_region(region, profile_name=profile)
 
-    def launch_asg(self, ami):
-        launch_configuration = LaunchConfiguration(name=lc_prefix + ami, image_id=ami, key_name=key,
-                                                   security_groups=[sg],
-                                                   instance_type="c3.large")
+        self.region = config['region']
+        self.availability_zones = config['availability_zones']
+        self.security_groups = config['security_groups']
+        self.lc_prefix = config['lc_prefix']
+        self.ag_prefix = config['ag_prefix']
+        self.key = config['key']
+        self.instance_type = config['instance_type']
+        self.load_balancers = config['load_balancers']
+
+        self.ec2 = boto.ec2.connect_to_region(self.region, profile_name=profile)
+        self.elb = boto.ec2.elb.ELBConnection(profile_name=profile)
+        self.autoscale = boto.ec2.autoscale.connect_to_region(self.region, profile_name=profile)
+
+    def launch_asg(self):
+        launch_configuration = LaunchConfiguration(name=self.lc_prefix + self.ami, image_id=self.ami, key_name=self.key,
+                                                   security_groups=self.security_groups,
+                                                   instance_type=self.instance_type)
         self.autoscale.create_launch_configuration(launch_configuration)
 
-        ag = AutoScalingGroup(group_name=ag_prefix + ami, load_balancers=[elb], availability_zones=availability_zones,
+        ag = AutoScalingGroup(group_name=self.ag_prefix + self.ami, load_balancers=self.load_balancers,
+                              availability_zones=self.availability_zones,
                               launch_config=launch_configuration, min_size=2, max_size=4, connection=self.autoscale)
         self.autoscale.create_auto_scaling_group(ag)
 
         return ag
 
     def get_asg(self, ami):
-        return self.get_asg_by_name(ag_prefix + ami)
+        return self.get_asg_by_name(self.ag_prefix + ami)
 
     def get_asg_by_name(self, name):
         groups = self.autoscale.get_all_groups(names=[name])
@@ -102,11 +101,12 @@ class DeployManager(object):
         while True:
             assert time.time() < timeout
             try:
-                health_statuses = self.elb.describe_instance_health(elb, instances=instance_ids)
+                # TODO Support health check on all ELBs, not just the first one
+                health_statuses = self.elb.describe_instance_health(self.load_balancers[0], instances=instance_ids)
 
                 if all([
-                    status.state == "InService"
-                    for status in health_statuses
+                            status.state == "InService"
+                            for status in health_statuses
                 ]):
                     break
 
@@ -128,8 +128,8 @@ class DeployManager(object):
         elapsed = 0
         while True:
             if all([
-                activity.progress == '100'
-                for activity in autoscaling_group.get_activities()
+                        activity.progress == '100'
+                        for activity in autoscaling_group.get_activities()
             ]):
                 break
 
@@ -145,13 +145,14 @@ class DeployManager(object):
             autoscaling_group = self.get_asg_by_name(autoscaling_group.name)
 
     def delete_launch_configuration_for_ami(self, ami):
-        self.autoscale.delete_launch_configuration(lc_prefix + ami)
+        self.autoscale.delete_launch_configuration(self.lc_prefix + ami)
 
     def delete_autoscaling_for_ami(self, ami):
-        self.autoscale.delete_auto_scaling_group(ag_prefix + ami)
+        self.autoscale.delete_auto_scaling_group(self.ag_prefix + ami)
 
     def start_ag(self):
-        created_ag = self.launch_asg(self.ami)
+        print "Starting autoscaling for role {0} using AMI {1}".format(self.role, self.ami)
+        created_ag = self.launch_asg()
         print 'Waiting for ASG to be initialized'
         time.sleep(1)
 
@@ -172,7 +173,7 @@ class DeployManager(object):
         groups_to_shut_down = [
             g
             for g in self.autoscale.get_all_groups()
-            if g.name != (ag_prefix + keep_ami) and g.name.startswith(ag_prefix)
+            if g.name != (self.ag_prefix + keep_ami) and g.name.startswith(self.ag_prefix)
         ]
 
         for g in self.autoscale.get_all_groups():
@@ -181,7 +182,7 @@ class DeployManager(object):
         print "Will shut down %s" % groups_to_shut_down
 
         for g in groups_to_shut_down:
-            ami = g.name[len(ag_prefix):]
+            ami = g.name[len(self.ag_prefix):]
             print ami
             self.shutdown_ag_by_ami(ami)
 
@@ -189,11 +190,11 @@ class DeployManager(object):
         created_ag = self.get_asg(ami)
         instances = self.get_asg_instances(created_ag)
 
-        print 'Shutting down instances'
+        print('Shutting down instances')
         created_ag.shutdown_instances()
         wait_for_status(instances, "terminated")
 
-        print 'Deleting autoscaling group'
+        print('Deleting autoscaling group')
         self.wait_for_group_to_be_quiet(created_ag)
         self.delete_autoscaling_for_ami(ami)
 

@@ -1,32 +1,48 @@
-#!/usr/bin/env python
+# !/usr/bin/env python
 """A script for managing autoscaling groups
 
 Usage:
-  scaling launch <ami>
-  scaling terminate <ami>
-  scaling terminate-others <ami>
+  amideploying launch <ami> [--role=<role>]
+  amideploying terminate <ami>
+  amideploying terminate-others <ami>
+  amideploying roles
+
 
 Commands:
   launch    - Creates a launch configuration and autoscaling group for the AMI and attaches it to the ELB
   terminate - Terminates the launch configuration and autoscaling group created for the AMI (assuming they were created
               using our standard naming.
+  roles     - Lists available roles
 
 Options:
   -h --help     Show this screen.
   --version     Show version.
 """
 
-
 from docopt import docopt
 from amideploying.managers import DeployManager
+from amideploying.config import get_config
 from amideploying import __version__
+import sys
 
 if __name__ == '__main__':
-    args = docopt(__doc__, version='Scaling {0}'.format(__version__))
+    args = docopt(__doc__, version='Am I Deploying? {0}'.format(__version__))
+
+    config = get_config()
+
+    if args['roles']:
+        for r in config['roles'].keys():
+            print r
+        sys.exit(0)
+
+    role = args['--role'] or config.get('default_role')
+    assert role is not None, \
+        "Either --role option, or default_role should be present"
+
     manager = DeployManager(profile="preview",
                             ami=args.get("<ami>"),
-                            config={},
-                            role="Titan-Collector")
+                            config=config.get('roles')[role],
+                            role=role)
     if args['launch']:
         manager.start_ag()
     if args['terminate']:

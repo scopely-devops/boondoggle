@@ -1,5 +1,5 @@
 from setuptools import setup
-from fleet_commander import __version__
+from amideploying import __version__
 
 
 setup(
