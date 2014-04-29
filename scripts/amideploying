@@ -46,6 +46,6 @@ if __name__ == '__main__':
     if args['launch']:
         manager.start_ag()
     if args['terminate']:
-        manager.shutdown_ag_by_ami()
+        manager.shutdown_ag_by_ami(args.get("<ami>"))
     if args['terminate-others']:
         manager.shutdown_other_ags()
