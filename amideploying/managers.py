@@ -167,7 +167,7 @@ class DeployManager(object):
 
         print 'Instances running'
 
-        if len(self.load_balancers) > 0:
+        if self.load_balancers is not None:
             self.wait_for_elb_health(instances)
             print 'Instances attached to ELB'
         else:
