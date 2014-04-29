@@ -4,7 +4,7 @@
       load_balancers:
         - titan-collector-preview
       security_groups:
-        - sg-6c02f606
+        - Titan-Collector
       key: dev-titan
       lc_prefix: titan-collector-lc-
       ag_prefix: titan-collector-asg-
@@ -12,4 +12,34 @@
       availability_zones:
         - us-east-1a
       instance_type: c3.large
+      cluster_minimum_size: 2
+      cluster_maximum_size: 10
+    Titan-Enricher:
+      load_balancers:
+        - titan-collector-preview
+      security_groups:
+        - Titan-Collector
+      key: dev-titan
+      lc_prefix: titan-enricher-lc-
+      ag_prefix: titan-enricher-asg-
+      region: us-east-1
+      availability_zones:
+        - us-east-1a
+      instance_type: c3.large
+      cluster_minimum_size: 1
+      cluster_maximum_size: 4
+    Titan-Forwarder:
+      load_balancers:
+        - titan-collector-preview
+      security_groups:
+        - Titan-Collector
+      key: dev-titan
+      lc_prefix: titan-forwarder-lc-
+      ag_prefix: titan-forwarder-asg-
+      region: us-east-1
+      availability_zones:
+        - us-east-1a
+      instance_type: c3.large
+      cluster_minimum_size: 1
+      cluster_maximum_size: 4
   default_role: Titan-Collector

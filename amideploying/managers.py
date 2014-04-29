@@ -47,6 +47,8 @@ class DeployManager(object):
         self.key = config['key']
         self.instance_type = config['instance_type']
         self.load_balancers = config['load_balancers']
+        self.cluster_minimum_size = config['cluster_minimum_size']
+        self.cluster_maximum_size = config['cluster_maximum_size']
 
         self.ec2 = boto.ec2.connect_to_region(self.region, profile_name=profile)
         self.elb = boto.ec2.elb.ELBConnection(profile_name=profile)
@@ -60,7 +62,8 @@ class DeployManager(object):
 
         ag = AutoScalingGroup(group_name=self.ag_prefix + self.ami, load_balancers=self.load_balancers,
                               availability_zones=self.availability_zones,
-                              launch_config=launch_configuration, min_size=2, max_size=4, connection=self.autoscale)
+                              launch_config=launch_configuration, min_size=self.cluster_minimum_size,
+                              max_size=self.cluster_maximum_size, connection=self.autoscale)
         self.autoscale.create_auto_scaling_group(ag)
 
         return ag
@@ -164,9 +167,11 @@ class DeployManager(object):
 
         print 'Instances running'
 
-        self.wait_for_elb_health(instances)
-
-        print 'Instances attached to ELB'
+        if len(self.elb) > 0:
+            self.wait_for_elb_health(instances)
+            print 'Instances attached to ELB'
+        else:
+            print 'Skipping ELB health check'
 
     def shutdown_other_ags(self):
         keep_ami = self.ami
