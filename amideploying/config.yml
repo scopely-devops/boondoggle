@@ -16,7 +16,6 @@
       cluster_maximum_size: 10
     Titan-Enricher:
       load_balancers:
-        - titan-collector-preview
       security_groups:
         - Titan-Collector
       key: dev-titan
@@ -30,7 +29,6 @@
       cluster_maximum_size: 4
     Titan-Forwarder:
       load_balancers:
-        - titan-collector-preview
       security_groups:
         - Titan-Collector
       key: dev-titan
