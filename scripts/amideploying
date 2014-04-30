@@ -2,10 +2,10 @@
 """A script for managing autoscaling groups
 
 Usage:
-  amideploying launch <ami> [--role=<role>]
-  amideploying terminate <ami>
-  amideploying terminate-others <ami> [--role=<role>]
-  amideploying roles
+  amideploying [options] launch <ami> [--role=<role>] 
+  amideploying [options] terminate <ami>
+  amideploying [options] terminate-others <ami> [--role=<role>]
+  amideploying [options] roles
 
 
 Commands:
@@ -15,20 +15,28 @@ Commands:
   roles     - Lists available roles
 
 Options:
-  -h --help     Show this screen.
-  --version     Show version.
+  -h --help                           Show this screen.
+  -c --configuration=<configuration>
+  --version                           Show version.
 """
 
 from docopt import docopt
+from yaml import load
 from amideploying.managers import DeployManager
 from amideploying.config import get_config
-from amideploying import __version__
+from amideploying import __version__, __filename__
 import sys
 
 if __name__ == '__main__':
     args = docopt(__doc__, version='Am I Deploying? {0}'.format(__version__))
 
-    config = get_config()
+    if args['--configuration'] is not None:
+      config_path = args['--configuration']
+    else:
+      config_path = '{0}.yml'.format(__filename__)
+
+    with open(config_path, 'r') as fh:
+        config = load(fh)
 
     if args['roles']:
         for r in config['roles'].keys():
