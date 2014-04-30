@@ -4,7 +4,7 @@
 Usage:
   amideploying launch <ami> [--role=<role>]
   amideploying terminate <ami>
-  amideploying terminate-others <ami>
+  amideploying terminate-others <ami> [--role=<role>]
   amideploying roles
 
 
