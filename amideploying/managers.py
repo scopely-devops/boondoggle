@@ -164,6 +164,9 @@ class DeployManager(object):
         print instances
 
         wait_for_status(instances, "running")
+        for instance in self.instances:
+            instance.add_tag("Role", self.role)
+            instance.add_tag("Name", "{0} on {1}".format(self.role, self.ami))
 
         print 'Instances running'
 
