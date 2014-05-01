@@ -8,6 +8,7 @@ import boto.ec2.elb
 import boto.ec2.cloudwatch
 from boto.ec2.cloudwatch import MetricAlarm
 from boto.ec2.autoscale import ScalingPolicy
+from boto.ec2.autoscale.tag import Tag
 
 
 def wait_for_status(instances_to_watch, state):
@@ -246,14 +247,15 @@ class DeployManager(object):
         print 'Waiting for ASG to be initialized'
         time.sleep(1)
 
+        self.autoscale.create_or_update_tags([
+            Tag(key="Role", value=self.role, propagate_at_launch=True, resource_id=created_ag.name)
+        ])
+
         instances = self.get_asg_instances(created_ag)
 
         print instances
 
         wait_for_status(instances, "running")
-        for instance in instances:
-            instance.add_tag("Role", self.role)
-            instance.add_tag("Name", "{0} on {1}".format(self.role, self.ami))
 
         print 'Instances running'
 
@@ -271,7 +273,6 @@ class DeployManager(object):
             self.set_up_asg_notifications(created_ag)
         else:
             print 'Skipping notification setup; no notifications configured'
-
 
     def shutdown_other_ags(self):
         keep_ami = self.ami
@@ -293,15 +294,18 @@ class DeployManager(object):
 
     def shutdown_ag_by_ami(self, ami):
         created_ag = self.get_asg(ami)
-        instances = self.get_asg_instances(created_ag)
+        if created_ag is not None:
+            instances = self.get_asg_instances(created_ag)
 
-        print('Shutting down instances')
-        created_ag.shutdown_instances()
-        wait_for_status(instances, "terminated")
+            print('Shutting down instances')
+            created_ag.shutdown_instances()
+            wait_for_status(instances, "terminated")
 
-        print('Deleting autoscaling group')
-        self.wait_for_group_to_be_quiet(created_ag)
-        self.delete_autoscaling_for_ami(ami)
+            print('Deleting autoscaling group')
+            self.wait_for_group_to_be_quiet(created_ag)
+            self.delete_autoscaling_for_ami(ami)
+        else:
+            print('No group found for AMI')
 
-        print 'Deleting launch configuration'
+        print('Deleting launch configuration')
         self.delete_launch_configuration_for_ami(ami)

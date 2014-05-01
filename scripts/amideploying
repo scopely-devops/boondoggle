@@ -3,7 +3,7 @@
 
 Usage:
   amideploying [options] launch <ami> [--role=<role>] 
-  amideploying [options] terminate <ami>
+  amideploying [options] terminate <ami> [--role=<role>]
   amideploying [options] terminate-others <ami> [--role=<role>]
   amideploying [options] roles
 
