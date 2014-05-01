@@ -5,6 +5,9 @@ import boto.ec2.autoscale
 from boto.ec2.autoscale import AutoScalingGroup
 from boto.ec2.autoscale import LaunchConfiguration
 import boto.ec2.elb
+import boto.ec2.cloudwatch
+from boto.ec2.cloudwatch import MetricAlarm
+from boto.ec2.autoscale import ScalingPolicy
 
 
 def wait_for_status(instances_to_watch, state):
@@ -49,10 +52,12 @@ class DeployManager(object):
         self.load_balancers = config['load_balancers']
         self.cluster_minimum_size = config['cluster_minimum_size']
         self.cluster_maximum_size = config['cluster_maximum_size']
+        self.scaling_notification_recipients = config['notify']
 
         self.ec2 = boto.ec2.connect_to_region(self.region, profile_name=profile)
         self.elb = boto.ec2.elb.ELBConnection(profile_name=profile)
         self.autoscale = boto.ec2.autoscale.connect_to_region(self.region, profile_name=profile)
+        self.cloudwatch = boto.ec2.cloudwatch.connect_to_region(self.region, profile_name=profile)
 
     def launch_asg(self):
         launch_configuration = LaunchConfiguration(name=self.lc_prefix + self.ami, image_id=self.ami, key_name=self.key,
@@ -90,6 +95,59 @@ class DeployManager(object):
         instance_ids = [i.instance_id for i in refreshed_group.instances]
         instances = self.ec2.get_only_instances(instance_ids)
         return instances
+
+    def set_up_asg_triggers(self, group):
+        scale_up_policy = ScalingPolicy(
+            name='scale_up', adjustment_type='ChangeInCapacity',
+            as_name=group.name, scaling_adjustment=1, cooldown=180)
+        scale_down_policy = ScalingPolicy(
+            name='scale_down', adjustment_type='ChangeInCapacity',
+            as_name=group.name, scaling_adjustment=-1, cooldown=180)
+
+        alarm_dimensions = {"AutoScalingGroupName": group.name}
+
+        self.autoscale.create_scaling_policy(scale_up_policy)
+        self.autoscale.create_scaling_policy(scale_down_policy)
+
+        scale_up_policy = self.autoscale.get_all_policies(
+            as_group=group.name, policy_names=['scale_up'])[0]
+        scale_down_policy = self.autoscale.get_all_policies(
+            as_group=group.name, policy_names=['scale_down'])[0]
+
+        alarms = [
+            MetricAlarm(
+                name='scale_up_on_cpu', namespace='AWS/EC2',
+                metric='CPUUtilization', statistic='Average',
+                comparison='>', threshold=70,
+                period=60, evaluation_periods=2,
+                alarm_actions=[scale_up_policy.policy_arn],
+                dimensions=alarm_dimensions),
+            MetricAlarm(
+                name='scale_down_on_cpu', namespace='AWS/EC2',
+                metric='CPUUtilization', statistic='Average',
+                comparison='<', threshold=40,
+                period=60, evaluation_periods=2,
+                alarm_actions=[scale_down_policy.policy_arn],
+                dimensions=alarm_dimensions)
+        ]
+
+        for alarm in alarms:
+            print "Setting up {0} alarm {1} {2} {3}".format(
+                alarm.metric,
+                alarm.statistic,
+                alarm.comparison,
+                alarm.threshold)
+            self.cloudwatch.create_alarm(alarm)
+
+    def set_up_asg_notifications(self, group):
+        if self.scaling_notification_recipients is not None:
+            for arn in self.scaling_notification_recipients:
+                self.autoscale.put_notification_configuration(group, arn, [
+                    "autoscaling:EC2_INSTANCE_LAUNCH",
+                    "autoscaling:EC2_INSTANCE_LAUNCH_ERROR",
+                    "autoscaling:EC2_INSTANCE_TERMINATE",
+                    "autoscaling:EC2_INSTANCE_TERMINATE_ERROR"
+                ])
 
     def wait_for_elb_health(self, instances):
         """Waits for all of the instances to be reported as healthy by the ELB"""
@@ -164,7 +222,7 @@ class DeployManager(object):
         print instances
 
         wait_for_status(instances, "running")
-        for instance in self.instances:
+        for instance in instances:
             instance.add_tag("Role", self.role)
             instance.add_tag("Name", "{0} on {1}".format(self.role, self.ami))
 
@@ -175,6 +233,16 @@ class DeployManager(object):
             print 'Instances attached to ELB'
         else:
             print 'Skipping ELB health check'
+
+        print 'Setting up autoscaling triggers'
+        self.set_up_asg_triggers(created_ag)
+
+        if self.scaling_notification_recipients is not None:
+            print 'Setting up notifications'
+            self.set_up_asg_notifications(created_ag)
+        else:
+            print 'Skipping notification setup; no notifications configured'
+
 
     def shutdown_other_ags(self):
         keep_ami = self.ami
