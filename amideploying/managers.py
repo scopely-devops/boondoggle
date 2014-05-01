@@ -146,17 +146,12 @@ class DeployManager(object):
             "autoscaling_group": {"AutoScalingGroupName": autoscaling_group.name}
         }
 
+        kwargs = dict(template)
+        kwargs['alarm_actions'] = [action_arn]
+        kwargs['dimensions'] = dimensions[template['dimension']]
+        del kwargs['dimension']
         alarm = MetricAlarm(
-            name=template['name'],
-            namespace=template['namespace'],
-            metric=template['metric'],
-            statistic=template['statistic'],
-            comparison=template['comparison'],
-            threshold=template['threshold'],
-            period=template['period'],
-            evaluation_periods=template['evaluation_periods'],
-            alarm_actions=[action_arn],
-            dimensions=dimensions[template['dimension']]
+            **kwargs
         )
 
         return alarm
