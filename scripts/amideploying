@@ -49,6 +49,7 @@ if __name__ == '__main__':
     manager = DeployManager(profile="preview",
                             ami=args.get("<ami>"),
                             config=config.get('roles')[role],
+                            alarms=config.get('alarms'),
                             role=role)
     if args['launch']:
         manager.start_ag()

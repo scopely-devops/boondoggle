@@ -37,10 +37,11 @@ def wait_for_status(instances_to_watch, state):
 
 
 class DeployManager(object):
-    def __init__(self, profile, role, config, ami):
+    def __init__(self, profile, role, config, alarms, ami):
         self.profile = profile
         self.role = role
         self.ami = ami
+        self.alarms = alarms
 
         self.region = config['region']
         self.availability_zones = config['availability_zones']
@@ -53,6 +54,8 @@ class DeployManager(object):
         self.cluster_minimum_size = config['cluster_minimum_size']
         self.cluster_maximum_size = config['cluster_maximum_size']
         self.scaling_notification_recipients = config['notify']
+        self.scale_up = config['scale_up']
+        self.scale_down = config['scale_down']
 
         self.ec2 = boto.ec2.connect_to_region(self.region, profile_name=profile)
         self.elb = boto.ec2.elb.ELBConnection(profile_name=profile)
@@ -104,8 +107,6 @@ class DeployManager(object):
             name='scale_down', adjustment_type='ChangeInCapacity',
             as_name=group.name, scaling_adjustment=-1, cooldown=180)
 
-        alarm_dimensions = {"AutoScalingGroupName": group.name}
-
         self.autoscale.create_scaling_policy(scale_up_policy)
         self.autoscale.create_scaling_policy(scale_down_policy)
 
@@ -114,30 +115,58 @@ class DeployManager(object):
         scale_down_policy = self.autoscale.get_all_policies(
             as_group=group.name, policy_names=['scale_down'])[0]
 
-        alarms = [
-            MetricAlarm(
-                name='scale_up_on_cpu', namespace='AWS/EC2',
-                metric='CPUUtilization', statistic='Average',
-                comparison='>', threshold=70,
-                period=60, evaluation_periods=2,
-                alarm_actions=[scale_up_policy.policy_arn],
-                dimensions=alarm_dimensions),
-            MetricAlarm(
-                name='scale_down_on_cpu', namespace='AWS/EC2',
-                metric='CPUUtilization', statistic='Average',
-                comparison='<', threshold=40,
-                period=60, evaluation_periods=2,
-                alarm_actions=[scale_down_policy.policy_arn],
-                dimensions=alarm_dimensions)
+        scale_up_alarms = [
+            self.create_alarm(group, template, scale_up_policy.policy_arn)
+            for template in self.scale_up
         ]
 
-        for alarm in alarms:
-            print "Setting up {0} alarm {1} {2} {3}".format(
-                alarm.metric,
-                alarm.statistic,
-                alarm.comparison,
-                alarm.threshold)
-            self.cloudwatch.create_alarm(alarm)
+        scale_down_alarms = [
+            self.create_alarm(group, template, scale_down_policy.policy_arn)
+            for template in self.scale_down
+        ]
+
+        print("Scale-up alarms...")
+        for alarm in scale_up_alarms:
+            self.set_up_alarm(alarm)
+
+        print("Scale-down alarms...")
+        for alarm in scale_down_alarms:
+            self.set_up_alarm(alarm)
+
+    def create_alarm(self, autoscaling_group, alarm_template_name, action_arn):
+        if alarm_template_name not in self.alarms:
+            print("Skipping alarm {0}; no template found".format(alarm_template_name))
+            return
+
+        template = self.alarms[alarm_template_name]
+
+        dimensions = {
+            "load_balancer": {"LoadBalancerName": self.load_balancers},
+            "autoscaling_group": {"AutoScalingGroupName": autoscaling_group.name}
+        }
+
+        alarm = MetricAlarm(
+            name=template['name'],
+            namespace=template['namespace'],
+            metric=template['metric'],
+            statistic=template['statistic'],
+            comparison=template['comparison'],
+            threshold=template['threshold'],
+            period=template['period'],
+            evaluation_periods=template['evaluation_periods'],
+            alarm_actions=[action_arn],
+            dimensions=dimensions[template['dimension']]
+        )
+
+        return alarm
+
+    def set_up_alarm(self, alarm):
+        print "Setting up {0} alarm {1} {2} {3}".format(
+            alarm.metric,
+            alarm.statistic,
+            alarm.comparison,
+            alarm.threshold)
+        self.cloudwatch.create_alarm(alarm)
 
     def set_up_asg_notifications(self, group):
         if self.scaling_notification_recipients is not None:
