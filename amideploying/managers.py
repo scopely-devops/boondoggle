@@ -57,6 +57,7 @@ class DeployManager(object):
         self.scaling_notification_recipients = config['notify']
         self.scale_up = config['scale_up']
         self.scale_down = config['scale_down']
+        self.instance_profile = config['instance_profile']
 
         self.ec2 = boto.ec2.connect_to_region(self.region, profile_name=profile)
         self.elb = boto.ec2.elb.ELBConnection(profile_name=profile)
@@ -66,7 +67,8 @@ class DeployManager(object):
     def launch_asg(self):
         launch_configuration = LaunchConfiguration(name=self.lc_prefix + self.ami, image_id=self.ami, key_name=self.key,
                                                    security_groups=self.security_groups,
-                                                   instance_type=self.instance_type)
+                                                   instance_type=self.instance_type,
+                                                   instance_profile_name=self.instance_profile)
         self.autoscale.create_launch_configuration(launch_configuration)
 
         ag = AutoScalingGroup(group_name=self.ag_prefix + self.ami, load_balancers=self.load_balancers,
