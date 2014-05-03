@@ -14,7 +14,7 @@ from boto.ec2.autoscale.tag import Tag
 def wait_for_status(instances_to_watch, state):
     """Waits for all of the instances to reach the specified state"""
     instance_ids = [instance.id for instance in instances_to_watch]
-    print "Waiting for state %s, instances %s" % (state, instance_ids)
+    print("Waiting for state {0}, instances {1}".format(state, instance_ids))
 
     maximum = 60 * 5
     elapsed = 0
@@ -28,11 +28,11 @@ def wait_for_status(instances_to_watch, state):
                             for i in instances_to_watch
         ]):
             break
-        print '(%ds) Waiting for state %s...' % (elapsed, state)
-        print [
+        print('({0}s) Waiting for state {1}...'.format((elapsed, state)))
+        print([
             instance.state
             for instance in instances_to_watch
-        ]
+        ])
         elapsed += 5
         time.sleep(5)
 
@@ -157,11 +157,11 @@ class DeployManager(object):
         return alarm
 
     def set_up_alarm(self, alarm):
-        print "Setting up {0} alarm {1} {2} {3}".format(
+        print("Setting up {0} alarm {1} {2} {3}".format(
             alarm.metric,
             alarm.statistic,
             alarm.comparison,
-            alarm.threshold)
+            alarm.threshold))
         self.cloudwatch.create_alarm(alarm)
 
     def set_up_asg_notifications(self, group):
@@ -196,13 +196,13 @@ class DeployManager(object):
                 ]):
                     break
 
-                print '(%ds) Waiting for instances to be in service on ELB...' % elapsed
-                print [
+                print('({0}s) Waiting for instances to be in service on ELB...'.format(elapsed))
+                print([
                     status.state
                     for status in health_statuses
-                ]
+                ])
             except BotoServerError:
-                print '(%ds) Waiting for instances to be attached to ELB' % elapsed
+                print('({0}s) Waiting for instances to be attached to ELB'.format(elapsed))
 
             elapsed += 5
             time.sleep(5)
@@ -219,10 +219,10 @@ class DeployManager(object):
             ]):
                 break
 
-            print "(%ds) ASG has activities with progress %s" % (elapsed, [
+            print("({0}s) ASG has activities with progress {1}".format(elapsed, [
                 activity.progress
                 for activity in autoscaling_group.get_activities()
-            ])
+            ]))
 
             assert elapsed < maximum_wait
 
@@ -237,9 +237,9 @@ class DeployManager(object):
         self.autoscale.delete_auto_scaling_group(self.ag_prefix + ami)
 
     def start_ag(self):
-        print "Starting autoscaling for role {0} using AMI {1}".format(self.role, self.ami)
+        print("Starting autoscaling for role {0} using AMI {1}".format(self.role, self.ami))
         created_ag = self.launch_asg()
-        print 'Waiting for ASG to be initialized'
+        print('Waiting for ASG to be initialized')
         time.sleep(1)
 
         self.autoscale.create_or_update_tags([
@@ -248,26 +248,24 @@ class DeployManager(object):
 
         instances = self.get_asg_instances(created_ag)
 
-        print instances
-
         wait_for_status(instances, "running")
 
-        print 'Instances running'
+        print('Instances running')
 
         if self.load_balancers is not None:
             self.wait_for_elb_health(instances)
-            print 'Instances attached to ELB'
+            print('Instances attached to ELB')
         else:
-            print 'Skipping ELB health check'
+            print('Skipping ELB health check')
 
-        print 'Setting up autoscaling triggers'
+        print('Setting up autoscaling triggers')
         self.set_up_asg_triggers(created_ag)
 
         if self.scaling_notification_recipients is not None:
-            print 'Setting up notifications'
+            print('Setting up notifications')
             self.set_up_asg_notifications(created_ag)
         else:
-            print 'Skipping notification setup; no notifications configured'
+            print('Skipping notification setup; no notifications configured')
 
     def shutdown_other_ags(self):
         keep_ami = self.ami
@@ -278,13 +276,13 @@ class DeployManager(object):
         ]
 
         for g in self.autoscale.get_all_groups():
-            print g.name
+            print(g.name)
 
-        print "Will shut down %s" % groups_to_shut_down
+        print("Will shut down {0}".format(groups_to_shut_down))
 
         for g in groups_to_shut_down:
             ami = g.name[len(self.ag_prefix):]
-            print ami
+            print(ami)
             self.shutdown_ag_by_ami(ami)
 
     def shutdown_ag_by_ami(self, ami):
