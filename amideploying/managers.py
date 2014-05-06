@@ -28,7 +28,7 @@ def wait_for_status(instances_to_watch, state):
                             for i in instances_to_watch
         ]):
             break
-        print('({0}s) Waiting for state {1}...'.format((elapsed, state)))
+        print('({0}s) Waiting for state {1}...'.format(elapsed, state))
         print([
             instance.state
             for instance in instances_to_watch
