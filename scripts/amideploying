@@ -2,19 +2,21 @@
 """A script for managing stacks using Cloudformation templates
 
 Usage:
-  amideploying ensure <name> --url <url> <parameters>...
-  amideploying cancel-update <name>
-  amideploying status <name>
+  amideploying [options] ensure <name> --url <url> <parameters>...
+  amideploying [options] cancel-update <name>
+  amideploying [options] status <name>
 
 Commands:
-  ensure            Updates the stack with the given name to use the specified template, hosted on S3. This creates the
-                    stack if necessary.
-  cancel-update     Cancels an in-progress update on the specified stack.
-  status            Returns the current status of the specified stack.
+  ensure                    Updates the stack with the given name to use the specified template, hosted on S3. This creates the
+                            stack if necessary.
+  cancel-update             Cancels an in-progress update on the specified stack.
+  status                    Returns the current status of the specified stack.
 
 Options:
-  -h --help         Show this screen.
-  -v --version      Show version.
+  -p --profile=<profile>    Use the specified profile in your .boto
+  -r --region=<region>      Use the specified region [default: us-east-1]
+  -h --help                 Show this screen.
+  -v --version              Show version.
 """
 
 from docopt import docopt
@@ -25,8 +27,7 @@ from amideploying import __version__
 
 if __name__ == '__main__':
     args = docopt(__doc__, version='Am I Deploying? {0}'.format(__version__))
-
-    manager = DeployManager(region="us-east-1")
+    manager = DeployManager(region=args.get("--region"), profile=args.get("--profile"))
 
     if args['ensure']:
         parameters = args.get("<parameters>")
@@ -42,4 +43,8 @@ if __name__ == '__main__':
     if args['cancel-update']:
         manager.cancel_update(args.get("<name>"))
     if args['status']:
-        manager.status(args.get("<name>"))
+        status = manager.status(args.get("<name>"))
+        if status is None:
+            print("No matching stack")
+        else:
+            print status
