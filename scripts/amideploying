@@ -2,7 +2,7 @@
 """A script for managing stacks using Cloudformation templates
 
 Usage:
-  amideploying [options] ensure <name> --url <url> <parameters>...
+  amideploying [options] ensure <name> --url <url> [<parameters>]...
   amideploying [options] cancel-update <name>
   amideploying [options] status <name>
 
@@ -31,13 +31,15 @@ if __name__ == '__main__':
 
     if args['ensure']:
         parameters = args.get("<parameters>")
-        assert parameters is not None
 
         template_parameters = []
 
-        for parameter in parameters:
-            (k, v) = parameter.split(":")
-            template_parameters.append((k, v))
+        if parameters is not None:
+            for parameter in parameters:
+                pieces = parameter.split(":")
+                k = pieces[0]
+                v = ":".join(pieces[1:])
+                template_parameters.append((k, v))
 
         manager.ensure(args.get("<name>"), args.get("<url>"), template_parameters)
     if args['cancel-update']:
