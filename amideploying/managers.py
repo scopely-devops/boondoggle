@@ -64,7 +64,8 @@ class DeployManager(object):
                                 'UPDATE_ROLLBACK_FAILED',
                                 'UPDATE_ROLLBACK_COMPLETE']
 
-        timeout = time.time() + 60 * 10
+        # Give 45 minutes for operation completion
+        timeout = time.time() + 60 * 45
         interval = 2
         elapsed = 0
 
