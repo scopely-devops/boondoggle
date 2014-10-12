@@ -2,9 +2,9 @@
 """A script for managing stacks using Cloudformation templates
 
 Usage:
-  amideploying [options] ensure <name> --url <url> [<parameters>]...
-  amideploying [options] cancel-update <name>
-  amideploying [options] status <name>
+  boondoggle [options] ensure <name> --url <url> [<parameters>]...
+  boondoggle [options] cancel-update <name>
+  boondoggle [options] status <name>
 
 Commands:
   ensure                    Updates the stack with the given name to use the specified template, hosted on S3. This creates the
@@ -21,8 +21,8 @@ Options:
 
 from docopt import docopt
 
-from amideploying.managers import DeployManager
-from amideploying import __version__
+from boondoggle.managers import DeployManager
+from boondoggle import __version__
 
 
 if __name__ == '__main__':
