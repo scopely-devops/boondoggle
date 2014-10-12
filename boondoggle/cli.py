@@ -37,11 +37,13 @@ def cli(context, profile, region):
 @click.argument('name')
 @click.argument('params', nargs=-1)
 @click.option('--url',
-              help="URL of the cloudformation script.")
-def ensure(context, name, params, url):
+              help="URL of a cloudformation script.")
+@click.option('--file',
+              help="Path to a cloudformation file.")
+def ensure(context, name, params, url, file):
     """Updates the stack with the given name to use
-    the specified template, hosted on S3. This creates
-    the stack if necessary.
+    the specified template. This creates the stack if
+    necessary.
 
     """
     template_parameters = []
@@ -49,7 +51,8 @@ def ensure(context, name, params, url):
         for param in params:
             k, v = param.split(':', 1)
             template_parameters.append((k, v))
-        context.obj.ensure(name, url, template_parameters)
+        context.obj.ensure(name, template_parameters,
+                           url=url, path=file)
 
 
 @cli.command()
