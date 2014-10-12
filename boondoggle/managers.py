@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import time
+from os.path import expanduser
 
 import boto.cloudformation as cf
 from boto.exception import BotoServerError
@@ -23,19 +24,23 @@ class DeployManager(object):
         self.region = region
         self.cf = cf.connect_to_region(self.region, profile_name=profile)
 
-    def ensure(self, name, url, parameters):
+    def ensure(self, name, parameters, url=None, path=None):
         # First we check if the stack exists
         status = self.status(name)
 
+        args = {'stack_name': name,
+                'parameters': parameters}
+        if path:
+            with open(expanduser(path), 'r') as f:
+                args['template_body'] = f.read()
+        else:
+            args['template_url'] = url
+
         try:
             if status is None:
-                self.cf.create_stack(stack_name=name,
-                                     template_url=url,
-                                     parameters=parameters)
+                self.cf.create_stack(**args)
             else:
-                self.cf.update_stack(stack_name=name,
-                                     template_url=url,
-                                     parameters=parameters)
+                self.cf.update_stack(**args)
         except BotoServerError, ex:
             if ex.status == 403:
                 print("Forbidden! Provided credentials "
