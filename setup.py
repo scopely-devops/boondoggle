@@ -13,7 +13,7 @@ setup(
     include_package_data=True,
     scripts=['scripts/boondoggle'],
     keywords="aws cli fleet ec2 ami",
-    url="https://github.com/scopely/boondoggle",
+    url="https://github.com/scopely-devops/boondoggle",
     install_requires=['docopt', 'boto', 'PyYAML'],
     packages=['boondoggle'],
     classifiers=[
