@@ -10,6 +10,8 @@ Given a CloudFormation template residing on S3 that takes two parameters `HttpIm
 $ boondoggle ensure my-stack --url s3://cf-bucket/my-stack.cf HttpImage:ami-123abc DesiredHostCount:6
 ```
 
+_If your cloudformation file is local, use `--file` instead of `--url`._
+
 The `ensure` subcommand will create the stack if no such stack currently exists, or update it with the specified template on S3 and parameters if it already exists.
 
 Or cancel an in-progress update to a stack:
