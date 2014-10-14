@@ -24,9 +24,22 @@ class DeployManager(object):
         self.region = region
         self.cf = cf.connect_to_region(self.region, profile_name=profile)
 
-    def ensure(self, name, parameters, url=None, path=None):
+    def get_outputs(self, stack):
+        """Get the outputs of another stack."""
+        try:
+            stack = self.cf.describe_stacks(stack_name_or_id=stack)[0]
+            return [(output.key, output.value) for output in stack.outputs]
+        except BotoServerError as ex:
+            print("Something went wrong getting the outputs from this stack.")
+            print(ex.body)
+            exit(1)
+
+    def ensure(self, name, parameters, url=None, path=None, outputs_from=None):
         # First we check if the stack exists
         status = self.status(name)
+
+        if outputs_from:
+            parameters += self.get_outputs(outputs_from)
 
         args = {'stack_name': name,
                 'parameters': parameters}
