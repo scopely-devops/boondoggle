@@ -40,7 +40,9 @@ def cli(context, profile, region):
               help="URL of a cloudformation script.")
 @click.option('--file',
               help="Path to a cloudformation file.")
-def ensure(context, name, params, url, file):
+@click.option('--outputs-from',
+              help="Use another stack's outputs as inputs to this one.")
+def ensure(context, name, params, url, file, outputs_from):
     """Updates the stack with the given name to use
     the specified template. This creates the stack if
     necessary.
@@ -52,7 +54,8 @@ def ensure(context, name, params, url, file):
             k, v = param.split(':', 1)
             template_parameters.append((k, v))
         context.obj.ensure(name, template_parameters,
-                           url=url, path=file)
+                           url=url, path=file,
+                           outputs_from=outputs_from)
 
 
 @cli.command()
