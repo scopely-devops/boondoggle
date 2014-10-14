@@ -68,6 +68,12 @@ class DeployManager(object):
                 raise
 
         self.wait_for_completion(name)
+        outputs = self.get_outputs(name)
+        if outputs:
+            print("\nOutputs:\n")
+            for k, v in outputs:
+                print("    {}: {}".format(k, v))
+            print('')
 
     def cancel_update(self, name):
         self.cf.cancel_update_stack(stack_name_or_id=name)
