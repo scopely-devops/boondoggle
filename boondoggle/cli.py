@@ -53,9 +53,9 @@ def ensure(context, name, params, url, file, outputs_from):
         for param in params:
             k, v = param.split(':', 1)
             template_parameters.append((k, v))
-        context.obj.ensure(name, template_parameters,
-                           url=url, path=file,
-                           outputs_from=outputs_from)
+    context.obj.ensure(name, template_parameters,
+                       url=url, path=file,
+                       outputs_from=outputs_from)
 
 
 @cli.command()
