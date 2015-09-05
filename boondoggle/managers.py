@@ -34,9 +34,10 @@ class DeployManager(object):
             print(ex.body)
             exit(1)
 
-    def ensure(self, name, parameters, url=None, path=None, outputs_from=None):
+    def ensure(self, name, parameters, url=None, path=None, outputs_from=None, use_previous=False):
         # First we check if the stack exists
         status = self.status(name)
+        existing = self.existing_stack(name)
 
         if outputs_from:
             parameters += self.get_outputs(outputs_from)
@@ -53,6 +54,9 @@ class DeployManager(object):
             if status is None:
                 self.cf.create_stack(**args)
             else:
+                if use_previous == "True":
+                    args['parameters'] = self.fill_from_existing(args['parameters'], existing.parameters)
+                    print('params:', args['parameters'])
                 self.cf.update_stack(**args)
         except BotoServerError, ex:
             if ex.status == 403:
@@ -75,6 +79,21 @@ class DeployManager(object):
                 print("    {}: {}".format(k, v))
             print('')
 
+
+    def fill_from_existing(self, new, old):
+        retParams = []
+        for oldParamObj in old:
+            found = False
+            for newTuple in new:
+                if newTuple[0] == oldParamObj.key:
+                    found = True
+                    retParams.append(newTuple)
+                    print('append new')
+            if found == False:
+                retParams.append((oldParamObj.key, oldParamObj.value))
+                print('append old')
+        return retParams
+
     def cancel_update(self, name):
         self.cf.cancel_update_stack(stack_name_or_id=name)
         self.wait_for_completion(name)
@@ -91,6 +110,23 @@ class DeployManager(object):
                 return None
             if ex.status == 403:
                 print("Forbidden! Cannot check status "
+                      "with provided credentials")
+                exit(1)
+            else:
+                raise
+
+    def existing_stack(self, name):
+        try:
+            stack = self.cf.describe_stacks(stack_name_or_id=name)
+            if stack:
+                return stack[0]
+            else:
+                return []
+        except BotoServerError, ex:
+            if ex.status == 400:
+                return None
+            if ex.status == 403:
+                print("Forbidden! Cannot check stack "
                       "with provided credentials")
                 exit(1)
             else:
