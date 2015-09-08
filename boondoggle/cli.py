@@ -42,7 +42,7 @@ def cli(context, profile, region):
               help="Path to a cloudformation file.")
 @click.option('--outputs-from',
               help="Use another stack's outputs as inputs to this one.")
-@click.option('--useprevious',
+@click.option('--useprevious', is_flag=True,
               help="Use existing stack's parameters if any are excluded from this call.")
 def ensure(context, name, params, url, file, outputs_from, useprevious):
     """Updates the stack with the given name to use

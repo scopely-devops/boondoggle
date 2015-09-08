@@ -54,9 +54,8 @@ class DeployManager(object):
             if status is None:
                 self.cf.create_stack(**args)
             else:
-                if use_previous == "True":
+                if use_previous:
                     args['parameters'] = self.fill_from_existing(args['parameters'], existing.parameters)
-                    print('params:', args['parameters'])
                 self.cf.update_stack(**args)
         except BotoServerError, ex:
             if ex.status == 403:
@@ -88,10 +87,8 @@ class DeployManager(object):
                 if newTuple[0] == oldParamObj.key:
                     found = True
                     retParams.append(newTuple)
-                    print('append new')
             if found == False:
                 retParams.append((oldParamObj.key, oldParamObj.value))
-                print('append old')
         return retParams
 
     def cancel_update(self, name):
