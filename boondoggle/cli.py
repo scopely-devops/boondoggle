@@ -43,7 +43,7 @@ def cli(context, profile, region):
 @click.option('--outputs-from',
               help="Use another stack's outputs as inputs to this one.")
 @click.option('--use-previous-params', is_flag=True,
-              help="Use existing stack's parameters if any are excluded from this call.")
+              help="Default any excluded parameters to their existing values in Cloud Formation")
 def ensure(context, name, params, url, file, outputs_from, use_previous_params):
     """Updates the stack with the given name to use
     the specified template. This creates the stack if
